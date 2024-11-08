@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Formulation Results</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        /* Additional styles specific to this page */
+        .formulation-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: flex-start; /* Align items to the top */
+        }
+        .formula-box {
+            width: 32%;
+            background-color: #f9f9f9;
+            border: 1px solid #cccccc;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            /* Ensuring all boxes have equal height */
+            height: 900px; /* Adjust this value as needed */
+        }
+        .formula-box h2 {
+            color: #5C2E91;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .formula-details {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .ingredients-list {
+            list-style-type: none;
+            padding: 0;
+            font-size: 14px; /* Adjusted font size */
+            font-family: 'Arial', sans-serif;
+            margin-bottom: 15px;
+            max-height: 250px; /* Adjust as needed */
+            overflow-y: auto; /* Add scroll if content exceeds max-height */
+        }
+        .ingredients-list li {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 13px; /* Slightly smaller font for better aesthetics */
+        }
+        .ingredients-list li span {
+            display: inline-block;
+        }
+        .chart-container {
+            margin-top: auto;
+            /* Ensure the chart is at the bottom */
+        }
+        /* Radar chart styles */
+        .radar-chart {
+            width: 100%;
+            height: 250px; /* Adjust height to fit within the box */
+        }
+        @media (max-width: 768px) {
+            .formula-box {
+                width: 100%;
+                height: auto; /* Allow boxes to adjust height on small screens */
+                margin-bottom: 20px;
+            }
+        }
+    </style>
+    <!-- Include Chart.js library for radar charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <img src="{{ url_for('static', filename='LOGO-legacy.png') }}" alt="Logo" class="logo">
+        <h1>Formulation Results</h1>
+        <div class="formulation-container">
+            {% for formula_key, formula in formula_output.items() %}
+            <div class="formula-box">
+                <div class="formula-details">
+                    <h2>{{ formula_key.replace('_', ' ').title() }}</h2>
+                    <p><strong>pH:</strong> {{ formula['pH'] }}</p>
+                    <p><strong>Viscosity (cps):</strong> {{ formula['Viscosity (cps)'] }}</p>
+                    <p><strong>Appearance:</strong> {{ formula['Appearance'] }}</p>
+                    <h3>Ingredients:</h3>
+                    <ul class="ingredients-list">
+                        {% for ingredient in formula['Ingredients'] %}
+                        <li>
+                            <span>{{ ingredient['Ingredient'] }}</span>
+                            <span>{{ ingredient['%w/w'] }}%</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="chart-container">
+                    <h3>Additional Properties:</h3>
+                    <canvas id="radarChart{{ loop.index0 }}" class="radar-chart"></canvas>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    <script>
+        const propertiesList = ["absorption time", "Advance delivery system", "Matte-Finish and Oil control", "Long lasting hydration", "Spreadability", "Ease of formulating"];
+        const formulas = {{ formula_output | tojson | safe }};
+
+        Object.keys(formulas).forEach((key, index) => {
+            const ctx = document.getElementById('radarChart' + index).getContext('2d');
+            const data = propertiesList.map(prop => formulas[key]['Additional Properties'][prop]);
+            new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: propertiesList,
+                    datasets: [{
+                        label: key.replace('_', ' ').charAt(0).toUpperCase() + key.replace('_', ' ').slice(1),
+                        data: data,
+                        backgroundColor: 'rgba(92, 46, 145, 0.2)',
+                        borderColor: 'rgba(92, 46, 145, 1)',
+                        pointBackgroundColor: 'rgba(92, 46, 145, 1)',
+                    }]
+                },
+                options: {
+                    scales: {
+                        r: {
+                            suggestedMin: 0,
+                            suggestedMax: 5,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
