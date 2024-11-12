@@ -3,6 +3,7 @@ import re
 import os
 import json
 import random
+import traceback
 # Updated imports to address deprecation warnings
 from langchain_ollama import OllamaEmbeddings
 from langchain_chroma import Chroma
@@ -20,7 +21,7 @@ os.environ["GROQ_API_KEY"] = "gsk_yIZJ4YN1q0Px9Lf8TgQPWGdyb3FYBdWA9W02vHA0l7RJbB
 # Initialize LLM and vector database
 llm = ChatGroq(
     model="llama-3.1-70b-versatile",
-    temperature=0.1
+    temperature=0.3
 )
 
 loaded_vector_db = Chroma(
@@ -37,7 +38,7 @@ retriever = MultiQueryRetriever.from_llm(
 
 # Define the prompt template with escaped braces
 template = """
-You are a Cosmetic Formula Generator. Create 3 unique formulas based on these specifications:
+You are a Cosmetic Formula Generator. Create 3 unique formulas based on the following specifications:
 
 pH: {ph}
 Viscosity (cps): {viscosity}
@@ -50,13 +51,14 @@ Requirements:
 1. Generate exactly 3 formulas matching the given specifications.
 2. Each formula must have at least 10 ingredients.
 3. The sum of %w/w for all ingredients in each formula must equal exactly 100%.
-4. Use "di water" to adjust the total if needed and the value is more than 75%.
-5. Ensure variety in ingredients across formulas.
-6. Use ingredients and functions from unique_ingredient_function.json.
-7. Use viscosity_builder.json to estimate viscosity contributions.
+4. If the sum of the ingredients exceeds 75%, use "di water" to adjust the total percentage to 100%.
+5. Ensure that each formula has a diverse set of ingredients without excessive repetition across the formulas.
+6. Use ingredients and functions from the `unique_ingredient_function.json` file.
+7. Estimate viscosity contributions using the `viscosity_builder.json` file.
+8. Each formula should be distinct in terms of its ingredient composition and function, while still meeting the pH, viscosity, and appearance requirements.
 
 Output Format:
-Respond ONLY with a JSON object structured as follows:
+Respond ONLY with a valid JSON object structured as follows:
 
 {{
     "Formulas": [
@@ -75,12 +77,41 @@ Respond ONLY with a JSON object structured as follows:
                 ...
             ]
         }},
-        {{}},
-        {{}}
+        {{
+            "pH": <pH_value>,
+            "Viscosity (cps)": <viscosity_value>,
+            "Appearance": "<appearance_description>",
+            "Ingredients": [
+                {{
+                    "Ingredient": "<ingredient_name>",
+                    "Phase": "<phase>",
+                    "%w/w": <percentage>,
+                    "Function": "<function>",
+                    "Supplier": "<supplier>"
+                }},
+                ...
+            ]
+        }},
+        {{
+            "pH": <pH_value>,
+            "Viscosity (cps)": <viscosity_value>,
+            "Appearance": "<appearance_description>",
+            "Ingredients": [
+                {{
+                    "Ingredient": "<ingredient_name>",
+                    "Phase": "<phase>",
+                    "%w/w": <percentage>,
+                    "Function": "<function>",
+                    "Supplier": "<supplier>"
+                }},
+                ...
+            ]
+        }}
     ]
 }}
 
-Ensure the output is a valid JSON object with no additional text or explanations.
+Ensure the output is a valid JSON object with no additional text or explanations. The formulas must each be unique in composition while meeting the required pH, viscosity, and appearance criteria.
+
 """
 
 prompt = ChatPromptTemplate.from_template(template)
@@ -247,7 +278,7 @@ def api_generate_formulas():
     data = request.get_json()
     if not data:
         return jsonify({'error': 'Invalid input format'}), 400
-    
+
     try:
         user_id = data['user_id']
         formula_input = data['formula_input']
@@ -258,16 +289,16 @@ def api_generate_formulas():
         return jsonify({'error': f'Missing key: {e}'}), 400
     except (TypeError, ValueError) as e:
         return jsonify({'error': str(e)}), 400
-    
+
     try:
         result = generate_formulas(ph=ph, viscosity=viscosity, appearance=appearance)
-        
+
         # Process the result to match the new output format
         processed_result = process_formulation_output(result, user_id, formula_input)
-        
+
         # Save the result
         add_formulation_to_json(result, user_id)
-        
+
         # Return the result
         return jsonify({
             'user_id': user_id,
@@ -275,6 +306,8 @@ def api_generate_formulas():
             'formula_output': processed_result['formula_output']
         }), 200
     except Exception as e:
+        # Log the exception traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 # API documentation route
@@ -283,5 +316,4 @@ def api_docs():
     return render_template('api_docs.html')
 
 if __name__ == '__main__':
-    # Use debug=False and threaded=False to prevent threading issues on Windows
-    app.run(debug=False, threaded=False)
+    app.run(debug=True, threaded=False, host='0.0.0.0', port=5000)
